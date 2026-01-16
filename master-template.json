@@ -1,0 +1,87 @@
+
+{
+  "courseMetadata": {
+    "courseName": "שם הקורס המלא",
+    "lecturerName": "שם המרצה/היוצר",
+    "semester": "2025",
+    "totalLessons": 5
+  },
+  "chapterData": {
+    "lessonNumber": 1,
+    "title": "פרק 1: שם הפרק",
+    "topic": "נושא הליבה של הפרק",
+    "timeEstimate": "25 דקות",
+    "dueDate": "ללא הגבלה",
+    "weight": "20%",
+    "themeColorPrimary": "#4f46e5",
+    "themeColorSecondary": "#818cf8",
+    
+    "narration": {
+      "welcome": {
+        "fileName": "narration_ch1_welcome.mp3",
+        "script": "[excited] ברוכים הבאים לפרק הראשון! ... היום נלמד על STRATEGY ועל היישום שלה בשטח. [thoughtful] האם אי פעם עצרתם לחשוב למה חלק מהפרויקטים מצליחים ואחרים לא? [whispers] בואו נגלה את הסוד..."
+      },
+      "caseStudy": {
+        "fileName": "narration_ch1_case.mp3",
+        "script": "[sighs] בואו נסתכל על מקרה בוחן אמיתי... חברת TECH-GEN נתקלה במחסום רציני. ... [excited] אבל אז הם גילו פתרון מדהים! בואו ננתח אותו יחד."
+      },
+      "summary": {
+        "fileName": "narration_ch1_summary.mp3",
+        "script": "[excited] וואו! סיימתם את הפרק הראשון בהצלחה רבה. ... [thoughtful] קחו רגע לחשוב איך אתם מיישמים את זה אצלכם. נתראה בפרק הבא!"
+      }
+    },
+
+    "welcomeTitle": "👋 יוצאים לדרך!",
+    "welcomeText": "תיאור קצר של מטרות הפרק והקשר לפרקים קודמים.",
+    "objectives": [
+      "הבנת מושג ה-API והחשיבות שלו",
+      "ניתוח כשלים בניהול פרויקטים",
+      "בניית שלבי עבודה נכונים"
+    ],
+
+    "flashcards": [
+      { "term": "מושג טכני 1", "definition": "הגדרה פשוטה ומדויקת למושג." },
+      { "term": "TERMINOLOGY 2", "definition": "הסבר מעמיק הכולל דוגמה." }
+    ],
+
+    "caseStudyTitle": "📋 מקרה בוחן: האתגר של חברת X",
+    "caseStudyContent": "<p>כאן מופיע סיפור המקרה. מומלץ להשתמש ב-<strong>הדגשות</strong> לנקודות חשובות.</p><p>ניתן להוסיף רשימות או פסקאות.</p>",
+    
+    "questions": [
+      {
+        "id": "q1",
+        "text": "מהי לדעתך סיבת הכישלון המרכזית במקרה שקראת?",
+        "options": [
+          { "id": "q1_o0", "text": "חוסר בתקציב", "isCorrect": false },
+          { "id": "q1_o1", "text": "ניהול שינוי לקוי (Change Management)", "isCorrect": true },
+          { "id": "q1_o2", "text": "בעיות טכנולוגיות", "isCorrect": false }
+        ]
+      }
+    ],
+
+    "analysisTitle": "ניתוח נתונים ומגמות",
+    "analysisDescription": "הסבר קצר על הנתונים המוצגים בגרף ומה התלמיד אמור לחפש בהם.",
+    "chartTitle": "מדד ביצועים שנתי",
+    "chartData": [
+      { "label": "ינואר", "value": 4.5 },
+      { "label": "פברואר", "value": 7.2 },
+      { "label": "מרץ", "value": 9.1 }
+    ],
+    "analysisQuestionText": "על סמך הנתונים בגרף, הסבר את העלייה החדה במרץ:",
+    "analysisMinChars": 40,
+
+    "planTitle": "בניית תוכנית פעולה",
+    "planDescription": "סדרו את השלבים הבאים לפי סדר החשיבות הנכון לביצוע:",
+    "planItems": [
+      "אפיון דרישות מול לקוח",
+      "פיתוח גרסת Alpha",
+      "ביצוע QA מקיף",
+      "עלייה לאוויר וניטור"
+    ],
+    "planQuestionText": "מדוע בחרת להציב את השלב הראשון בראש הרשימה?",
+    "planMinChars": 50,
+
+    "reflectionQuestionText": "שאלה אישית לסיום: איך הכלים שלמדת היום ישפיעו על צורת העבודה שלך מחר?",
+    "reflectionMinChars": 30
+  }
+}

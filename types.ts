@@ -1,3 +1,4 @@
+
 export interface QuestionOption {
   id: string;
   text: string;
@@ -20,66 +21,104 @@ export interface Flashcard {
   definition: string;
 }
 
+export interface NarrationPart {
+  fileName: string;
+  script: string;
+  stability?: number;
+  similarity_boost?: number;
+  model_id?: string;
+}
+
+export interface NarrationData {
+  welcome: NarrationPart;
+  caseStudy: NarrationPart;
+  summary: NarrationPart;
+}
+
+export interface PedagogicalReview {
+  bloomLevel: 'Remember' | 'Understand' | 'Apply' | 'Analyze' | 'Evaluate' | 'Create';
+  scaffoldingScore: number; // 1-100
+  engagementStrategy: string;
+  instructionalRationale: string;
+  suggestedImprovement: string;
+}
+
 export interface SyllabusItem {
   id: string;
   title: string;
   topic: string;
   lessonNumber: number;
   description: string;
-  generatedData?: AssignmentData; // Store the full generated content here
+  generatedData?: AssignmentData;
+  isDeployed?: boolean;
 }
 
 export interface AssignmentData {
-  // Meta
-  courseName: string; // "Guide Name" conceptually
-  lecturerName: string; // "Author" conceptually
-  semester: string; // "Version/Date"
+  courseName: string;
+  lecturerName: string;
+  semester: string;
   title: string;
   timeEstimate: string;
   dueDate: string;
   weight: string;
-  
-  // Context
+  submissionUrl?: string;
   topic: string;
   contextDescription: string;
   prerequisite: string;
-  lessonNumber: number; // "Chapter Number"
+  lessonNumber: number;
   totalLessons: number;
   nextLessonTeaser?: string;
-  
-  // New: Flashcards (Concepts)
   flashcards: Flashcard[];
-
-  // Intro
   welcomeTitle: string;
   welcomeText: string;
   objectives: string[];
-  
-  // Section 1: Case Study
   caseStudyTitle: string;
   caseStudyContent: string;
   questions: Question[];
-  
-  // Section 2: Analysis
   analysisTitle: string;
   analysisDescription: string;
   chartTitle: string;
   chartData: ChartDataPoint[];
   analysisQuestionText: string;
   analysisMinChars: number;
-  
-  // Section 3: Sort/Plan
   planTitle: string;
   planDescription: string;
   planItems: string[];
   planQuestionText: string;
   planMinChars: number;
-  
-  // Section 4: File & Reflection
   reflectionQuestionText: string;
   reflectionMinChars: number;
-  
-  // Style
   themeColorPrimary: string;
   themeColorSecondary: string;
+  narration: NarrationData;
+  imagePrompt: string;
+  pedagogicalReview: PedagogicalReview;
+}
+
+export type Competencies = { [key: string]: number };
+
+export interface StudentState {
+  completed_items: string[];
+  competencies: Competencies;
+  overall_progress: number;
+  momentum: number;
+  last_active: string;
+  ai_insight?: string;
+}
+
+export interface CPanelSettings {
+  domain: string;
+  apiToken: string;
+  username: string;
+  port: string;
+  remotePath: string;
+}
+
+export interface GuideIdea {
+  id: string;
+  title: string;
+  icon: string;
+  description: string;
+  category: 'Tech' | 'Business' | 'Soft Skills' | 'Creative' | 'Trending';
+  isTrend?: boolean;
 }
