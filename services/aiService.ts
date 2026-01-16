@@ -1,46 +1,98 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import OpenAI from "openai";
 import { AssignmentData, SyllabusItem, StudentState, GuideIdea } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize OpenRouter client
+const openrouter = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.OPENROUTER_API_KEY,
+  dangerouslyAllowBrowser: true, // Required for client-side usage
+  defaultHeaders: {
+    "HTTP-Referer": window.location.origin, // Optional: for rankings
+    "X-Title": "EduGen2", // Optional: shows in rankings
+  }
+});
+
+// Model configuration - you can change these to any OpenRouter-supported models
+const MODELS = {
+  CONTENT_GENERATION: "anthropic/claude-3.5-sonnet", // Best for complex content
+  TREND_DISCOVERY: "anthropic/claude-3.5-sonnet",    // Alternative: "openai/gpt-4-turbo"
+  STUDENT_INSIGHTS: "anthropic/claude-3.5-sonnet"    // Alternative: "google/gemini-pro-1.5"
+};
 
 /**
- * Discover trending guide ideas using Google Search grounding.
- * This function specifically looks for the "Next Big Things" in education and technology.
+ * Helper function to parse JSON from LLM response
+ */
+function parseJSONResponse(text: string): any {
+  try {
+    // Remove markdown code blocks if present
+    const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    return JSON.parse(cleaned);
+  } catch (error) {
+    console.error("JSON parse error:", error, "\nOriginal text:", text);
+    throw new Error("Failed to parse JSON response from LLM");
+  }
+}
+
+/**
+ * Discover trending guide ideas using web search simulation.
+ * Note: OpenRouter doesn't have Google Search grounding like Gemini.
+ * This function uses the model's knowledge + explicit instructions for current trends.
  */
 export const fetchTrendingIdeas = async (): Promise<GuideIdea[]> => {
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
-      contents: `חפש את הטרנדים הלימודיים והטכנולוגיים החמים ביותר לשבוע הנוכחי (פברואר 2025). 
-      מצא 6 נושאים חדשניים שמתאימים למדריכי למידה אינטראקטיביים. 
-      עבור כל נושא, צור: כותרת מושכת, תיאור קצר בעברית, ואייקון אמוג'י מתאים.
-      החזר מערך JSON בלבד.`,
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              title: { type: Type.STRING },
-              icon: { type: Type.STRING },
-              description: { type: Type.STRING },
-              category: { type: Type.STRING }
-            },
-            required: ["id", "title", "icon", "description"]
-          }
+    const prompt = `אתה מומחה לזיהוי טרנדים בחינוך וטכנולוגיה.
+
+חשב על הטרנדים הלימודיים והטכנולוגיים החמים ביותר לשבוע הנוכחי (פברואר 2025).
+מצא 6 נושאים חדשניים שמתאימים למדריכי למידה אינטראקטיביים.
+
+עבור כל נושא, צור:
+- id: מזהה ייחודי (string)
+- title: כותרת מושכת בעברית (string)
+- icon: אייקון אמוג'י מתאים (string)
+- description: תיאור קצר בעברית (string)
+- category: "Tech", "Business", "Soft Skills", או "Creative" (string)
+
+החזר **רק** JSON array תקין ללא טקסט נוסף.
+
+דוגמה לפורמט:
+[
+  {
+    "id": "trend-1",
+    "title": "סוכני AI אוטונומיים",
+    "icon": "🤖",
+    "description": "למד לבנות סוכנים חכמים שפועלים באופן עצמאי",
+    "category": "Tech"
+  }
+]`;
+
+    const response = await openrouter.chat.completions.create({
+      model: MODELS.TREND_DISCOVERY,
+      messages: [
+        {
+          role: "user",
+          content: prompt
         }
-      },
+      ],
+      response_format: { type: "json_object" }, // Enable JSON mode
+      temperature: 0.9, // Higher creativity for trends
+      max_tokens: 2000
     });
 
-    const trends = JSON.parse(response.text || "[]");
+    const content = response.choices[0]?.message?.content || "{}";
+    let trends = parseJSONResponse(content);
+
+    // If the response is wrapped in an object with a key, extract the array
+    if (!Array.isArray(trends)) {
+      trends = trends.trends || trends.ideas || trends.items || [];
+    }
+
     return trends.map((t: any, idx: number) => ({
-      ...t,
-      id: `trend-${idx}-${Date.now()}`,
-      category: 'Trending',
+      id: t.id || `trend-${idx}-${Date.now()}`,
+      title: t.title || "נושא חדש",
+      icon: t.icon || "📚",
+      description: t.description || "",
+      category: t.category || 'Trending',
       isTrend: true
     }));
   } catch (error) {
@@ -49,197 +101,249 @@ export const fetchTrendingIdeas = async (): Promise<GuideIdea[]> => {
   }
 };
 
+/**
+ * Generate student insight based on their progress
+ */
 export const generateStudentInsight = async (state: StudentState, courseName: string): Promise<string> => {
   try {
-    const prompt = `
-      As an expert pedagogical AI, analyze the following student's progress in the course "${courseName}":
-      - Progress: ${state.overall_progress}%
-      - Momentum: ${state.momentum}/100
-      
-      Provide a 1-sentence supportive insight in Hebrew that encourages them and suggests what to focus on. 
-    `;
-    
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
+    const prompt = `אתה מומחה פדגוגי מעודד ותומך.
+
+נתח את ההתקדמות של סטודנט בקורס "${courseName}":
+- התקדמות כללית: ${state.overall_progress}%
+- מומנטום למידה: ${state.momentum}/100
+
+ספק משפט תמיכה אחד בעברית שמעודד אותם ומציע על מה להתמקד.
+החזר **רק** את המשפט, ללא הקדמות או הסברים.`;
+
+    const response = await openrouter.chat.completions.create({
+      model: MODELS.STUDENT_INSIGHTS,
+      messages: [
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 150
     });
-    
-    return response.text?.trim() || "ממשיכים במסע הלמידה בכל הכוח!";
+
+    return response.choices[0]?.message?.content?.trim() || "ממשיכים במסע הלמידה בכל הכוח!";
   } catch (error) {
+    console.error("Student insight error:", error);
     return "כל הכבוד על ההתקדמות!";
   }
 };
 
+/**
+ * Generate a complete syllabus for a course
+ */
 export const generateSyllabus = async (guideTopic: string): Promise<{ syllabus: SyllabusItem[], englishTitle: string }> => {
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Create a professional pedagogical syllabus for a course named: "${guideTopic}" in Hebrew. 
-      Ensure a logical progression of skills using Bloom's Taxonomy. 5 chapters. 
-      Return JSON with 'englishTitle' (sanitized for URL) and 'syllabus' array.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            englishTitle: { type: Type.STRING },
-            syllabus: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  title: { type: Type.STRING },
-                  topic: { type: Type.STRING },
-                  lessonNumber: { type: Type.INTEGER },
-                  description: { type: Type.STRING }
-                },
-                required: ["id", "title", "topic", "lessonNumber", "description"]
-              }
-            }
-          }
+    const prompt = `צור סילבוס פדגוגי מקצועי לקורס בשם: "${guideTopic}" בעברית.
+
+דרישות:
+- 5 פרקים (chapters)
+- התקדמות לוגית על פי Bloom's Taxonomy
+- כל פרק כולל: id, title, topic, lessonNumber, description
+
+החזר JSON בפורמט הבא:
+{
+  "englishTitle": "Course-Name-In-English-For-URL",
+  "syllabus": [
+    {
+      "id": "chapter-1",
+      "title": "כותרת הפרק בעברית",
+      "topic": "נושא מרכזי",
+      "lessonNumber": 1,
+      "description": "תיאור מפורט של תוכן הפרק"
+    }
+  ]
+}
+
+החזר **רק** JSON תקין ללא טקסט נוסף.`;
+
+    const response = await openrouter.chat.completions.create({
+      model: MODELS.CONTENT_GENERATION,
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert educational content designer. Always return valid JSON."
+        },
+        {
+          role: "user",
+          content: prompt
         }
-      }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.7,
+      max_tokens: 3000
     });
-    const result = JSON.parse(response.text || "{}");
+
+    const content = response.choices[0]?.message?.content || "{}";
+    const result = parseJSONResponse(content);
+
     return {
-      syllabus: (result.syllabus || []).map((s: any) => ({ ...s, id: `chapter-${s.lessonNumber}` })),
+      syllabus: (result.syllabus || []).map((s: any) => ({
+        id: `chapter-${s.lessonNumber}`,
+        title: s.title || "פרק ללא כותרת",
+        topic: s.topic || "",
+        lessonNumber: s.lessonNumber || 1,
+        description: s.description || ""
+      })),
       englishTitle: result.englishTitle || "My-Guide"
     };
   } catch (error) {
-    console.error("Syllabus error:", error);
+    console.error("Syllabus generation error:", error);
     return { syllabus: [], englishTitle: "Error-Guide" };
   }
 };
 
-export const generateAssignmentFromTopic = async (topic: string, courseName: string, lessonNumber: number, totalLessons: number): Promise<AssignmentData> => {
-  const prompt = `
-    Create an interactive educational HTML assignment in HEBREW for Chapter ${lessonNumber} of "${courseName}".
-    Topic: "${topic}".
-    Total chapters: ${totalLessons}.
-    
-    REQUIREMENTS:
-    - Language: Hebrew only.
-    - Style: Professional, encouraging.
-    - Pedagogical: Use Bloom's Taxonomy, Scaffolding.
-    - Narration: Include emotional cues like [excited], [thoughtful].
-    
-    Return valid JSON.
-  `;
+/**
+ * Generate complete assignment content for a chapter
+ */
+export const generateAssignmentFromTopic = async (
+  topic: string,
+  courseName: string,
+  lessonNumber: number,
+  totalLessons: number
+): Promise<AssignmentData> => {
+  const prompt = `צור תוכן חינוכי אינטראקטיבי מלא בעברית לפרק ${lessonNumber} מתוך ${totalLessons} בקורס "${courseName}".
+נושא: "${topic}".
+
+דרישות:
+- שפה: עברית בלבד
+- סגנון: מקצועי ומעודד
+- פדגוגיה: Bloom's Taxonomy, Scaffolding
+- נרטיב: כלול סמני רגש כמו [excited], [thoughtful], [pauses]
+
+החזר JSON בפורמט הבא (כל השדות חובה):
+
+{
+  "courseName": "שם הקורס",
+  "lecturerName": "שם המרצה",
+  "semester": "סמסטר",
+  "title": "כותרת הפרק",
+  "timeEstimate": "זמן משוער (למשל: 45 דקות)",
+  "dueDate": "תאריך יעד",
+  "weight": "משקל (למשל: 10%)",
+  "topic": "נושא",
+  "contextDescription": "תיאור הקשר",
+  "prerequisite": "ידע מוקדם נדרש",
+  "lessonNumber": ${lessonNumber},
+  "totalLessons": ${totalLessons},
+  "nextLessonTeaser": "טיזר לפרק הבא",
+  "flashcards": [
+    { "term": "מונח", "definition": "הגדרה" }
+  ],
+  "welcomeTitle": "כותרת פתיחה",
+  "welcomeText": "טקסט פתיחה",
+  "objectives": ["מטרה 1", "מטרה 2"],
+  "caseStudyTitle": "כותרת מקרה מבחן",
+  "caseStudyContent": "תוכן המקרה",
+  "questions": [
+    {
+      "id": "q0",
+      "text": "שאלה",
+      "options": [
+        { "id": "q0_o0", "text": "תשובה 1", "isCorrect": false },
+        { "id": "q0_o1", "text": "תשובה 2", "isCorrect": true }
+      ]
+    }
+  ],
+  "analysisTitle": "כותרת ניתוח",
+  "analysisDescription": "תיאור הניתוח",
+  "chartTitle": "כותרת גרף",
+  "chartData": [
+    { "label": "תווית", "value": 50 }
+  ],
+  "analysisQuestionText": "שאלת ניתוח",
+  "analysisMinChars": 100,
+  "planTitle": "כותרת תכנון",
+  "planDescription": "תיאור תכנון",
+  "planItems": ["פריט 1", "פריט 2"],
+  "planQuestionText": "שאלת תכנון",
+  "planMinChars": 100,
+  "reflectionQuestionText": "שאלת רפלקציה",
+  "reflectionMinChars": 100,
+  "themeColorPrimary": "#4F46E5",
+  "themeColorSecondary": "#EC4899",
+  "imagePrompt": "prompt ליצירת תמונה",
+  "narration": {
+    "welcome": {
+      "fileName": "audio_ch${lessonNumber}_welcome.mp3",
+      "script": "סקריפט עם [excited] סמני [thoughtful] רגש"
+    },
+    "caseStudy": {
+      "fileName": "audio_ch${lessonNumber}_case.mp3",
+      "script": "סקריפט נוסף"
+    },
+    "summary": {
+      "fileName": "audio_ch${lessonNumber}_summary.mp3",
+      "script": "סקריפט סיכום"
+    }
+  },
+  "pedagogicalReview": {
+    "bloomLevel": "רמת Bloom (Remember/Understand/Apply/Analyze/Evaluate/Create)",
+    "scaffoldingScore": 75,
+    "engagementStrategy": "אסטרטגיית מעורבות",
+    "instructionalRationale": "נימוק פדגוגי",
+    "suggestedImprovement": "הצעות לשיפור"
+  }
+}
+
+החזר **רק** JSON תקין ללא טקסט נוסף או הסברים.`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            courseName: { type: Type.STRING },
-            lecturerName: { type: Type.STRING },
-            semester: { type: Type.STRING },
-            title: { type: Type.STRING },
-            timeEstimate: { type: Type.STRING },
-            dueDate: { type: Type.STRING },
-            weight: { type: Type.STRING },
-            topic: { type: Type.STRING },
-            contextDescription: { type: Type.STRING },
-            prerequisite: { type: Type.STRING },
-            lessonNumber: { type: Type.INTEGER },
-            totalLessons: { type: Type.INTEGER },
-            nextLessonTeaser: { type: Type.STRING },
-            flashcards: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT, properties: { term: { type: Type.STRING }, definition: { type: Type.STRING } }
-              }
-            },
-            welcomeTitle: { type: Type.STRING },
-            welcomeText: { type: Type.STRING },
-            objectives: { type: Type.ARRAY, items: { type: Type.STRING } },
-            caseStudyTitle: { type: Type.STRING },
-            caseStudyContent: { type: Type.STRING },
-            questions: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  text: { type: Type.STRING },
-                  options: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: { id: { type: Type.STRING }, text: { type: Type.STRING }, isCorrect: { type: Type.BOOLEAN } }
-                    }
-                  }
-                }
-              }
-            },
-            analysisTitle: { type: Type.STRING },
-            analysisDescription: { type: Type.STRING },
-            chartTitle: { type: Type.STRING },
-            chartData: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT, properties: { label: { type: Type.STRING }, value: { type: Type.NUMBER } }
-              }
-            },
-            analysisQuestionText: { type: Type.STRING },
-            analysisMinChars: { type: Type.INTEGER },
-            planTitle: { type: Type.STRING },
-            planDescription: { type: Type.STRING },
-            planItems: { type: Type.ARRAY, items: { type: Type.STRING } },
-            planQuestionText: { type: Type.STRING },
-            planMinChars: { type: Type.INTEGER },
-            reflectionQuestionText: { type: Type.STRING },
-            reflectionMinChars: { type: Type.INTEGER },
-            themeColorPrimary: { type: Type.STRING },
-            themeColorSecondary: { type: Type.STRING },
-            imagePrompt: { type: Type.STRING },
-            narration: {
-              type: Type.OBJECT,
-              properties: {
-                welcome: { type: Type.OBJECT, properties: { fileName: { type: Type.STRING }, script: { type: Type.STRING } } },
-                caseStudy: { type: Type.OBJECT, properties: { fileName: { type: Type.STRING }, script: { type: Type.STRING } } },
-                summary: { type: Type.OBJECT, properties: { fileName: { type: Type.STRING }, script: { type: Type.STRING } } }
-              }
-            },
-            pedagogicalReview: {
-              type: Type.OBJECT,
-              properties: {
-                bloomLevel: { type: Type.STRING },
-                scaffoldingScore: { type: Type.NUMBER },
-                engagementStrategy: { type: Type.STRING },
-                instructionalRationale: { type: Type.STRING },
-                suggestedImprovement: { type: Type.STRING }
-              }
-            }
-          }
+    const response = await openrouter.chat.completions.create({
+      model: MODELS.CONTENT_GENERATION,
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert educational content creator specializing in interactive Hebrew assignments. Always return valid JSON with ALL required fields."
+        },
+        {
+          role: "user",
+          content: prompt
         }
-      }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.8,
+      max_tokens: 8000 // Large content requires more tokens
     });
 
-    const data = JSON.parse(response.text || "{}");
+    const content = response.choices[0]?.message?.content || "{}";
+    const data = parseJSONResponse(content);
+
+    // Post-processing: ensure all required fields and add defaults
     data.totalLessons = totalLessons;
     data.lessonNumber = lessonNumber;
+
+    // Set narration file names
+    data.narration = data.narration || { welcome: {}, caseStudy: {}, summary: {} };
     data.narration.welcome.fileName = `audio_ch${lessonNumber}_welcome.mp3`;
     data.narration.caseStudy.fileName = `audio_ch${lessonNumber}_case.mp3`;
     data.narration.summary.fileName = `audio_ch${lessonNumber}_summary.mp3`;
-    
+
+    // Add ElevenLabs configuration
     ['welcome', 'caseStudy', 'summary'].forEach((part) => {
-      data.narration[part].stability = 0.5;
-      data.narration[part].similarity_boost = 0.8;
-      data.narration[part].model_id = "eleven_v3";
+      if (data.narration[part]) {
+        data.narration[part].stability = 0.5;
+        data.narration[part].similarity_boost = 0.8;
+        data.narration[part].model_id = "eleven_v3";
+      }
     });
 
-    data.questions = data.questions.map((q: any, i: number) => ({
-        ...q,
-        id: `q${i}`,
-        options: q.options.map((o: any, j: number) => ({ ...o, id: `q${i}_o${j}` }))
+    // Ensure proper question IDs
+    data.questions = (data.questions || []).map((q: any, i: number) => ({
+      ...q,
+      id: `q${i}`,
+      options: (q.options || []).map((o: any, j: number) => ({
+        ...o,
+        id: `q${i}_o${j}`
+      }))
     }));
-    return data;
+
+    return data as AssignmentData;
   } catch (error) {
     console.error("Content generation error:", error);
     throw error;
