@@ -8,7 +8,7 @@ const openrouter = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
   dangerouslyAllowBrowser: true, // Required for client-side usage
   defaultHeaders: {
-    "HTTP-Referer": window.location.origin, // Optional: for rankings
+    "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : '', // Optional: for rankings
     "X-Title": "EduGen2", // Optional: shows in rankings
   }
 });

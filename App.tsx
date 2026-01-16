@@ -3,9 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { SyllabusItem, AssignmentData, StudentState, GuideIdea } from './types';
 import { generateSyllabus, generateAssignmentFromTopic, generateStudentInsight, fetchTrendingIdeas } from './services/aiService';
 import { generateAssignmentHTML, generateCourseIndexHTML } from './services/generatorService';
+import { uploadToCPanel, getUploadConfig } from './services/uploadService';
 import StudentDashboard from './components/StudentDashboard';
 import ChapterPreviewModal from './components/ChapterPreviewModal';
-import { Download, Wand2, Eye, Zap, Sparkles, Lightbulb, Package, CheckCircle, RefreshCcw, LayoutGrid, Cpu, Briefcase, Heart, Palette, GraduationCap } from 'lucide-react';
+import { Download, Wand2, Eye, Zap, Sparkles, Lightbulb, Package, CheckCircle, RefreshCcw, LayoutGrid, Cpu, Briefcase, Heart, Palette, GraduationCap, Upload, Server } from 'lucide-react';
 import JSZip from 'jszip';
 import { GUIDE_IDEAS } from './constants';
 
@@ -22,6 +23,12 @@ function App() {
   const [currentIdeas, setCurrentIdeas] = useState<GuideIdea[]>(GUIDE_IDEAS);
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [isDiscovering, setIsDiscovering] = useState(false);
+
+  // Auto-upload state
+  const [autoUploadEnabled, setAutoUploadEnabled] = useState(
+    process.env.AUTO_UPLOAD_ENABLED === 'true'
+  );
+  const [uploadStatus, setUploadStatus] = useState<string>('');
 
   const [studentState, setStudentState] = useState<StudentState>({
     completed_items: [],
@@ -148,10 +155,40 @@ function App() {
     });
     zip.file('media.json', JSON.stringify(mediaMetadata, null, 2));
     const content = await zip.generateAsync({ type: 'blob' });
+
+    // Download locally
     const link = document.createElement('a');
     link.href = URL.createObjectURL(content);
     link.download = `${sanitizedCourseName}_Course.zip`;
     link.click();
+
+    // Auto-upload to cPanel if enabled
+    if (autoUploadEnabled) {
+      const uploadConfig = getUploadConfig();
+      if (uploadConfig) {
+        setUploadStatus('מעלה לשרת...');
+        setLoadingText(`📤 מעלה את "${sanitizedCourseName}" ל-bdnhost.net/Resources/...`);
+        try {
+          const result = await uploadToCPanel(content, sanitizedCourseName, uploadConfig);
+          if (result.success) {
+            setUploadStatus(`✅ ${result.message}`);
+            setTimeout(() => setUploadStatus(''), 5000);
+            alert(`🎉 הצלחה!\n\n${result.message}\n\nהקורס זמין עכשיו ב:\nhttps://bdnhost.net/Resources/${sanitizedCourseName}/`);
+          } else {
+            setUploadStatus(`❌ ${result.message}`);
+            console.error('Upload failed:', result.error);
+            alert(`העלאה נכשלה: ${result.error || result.message}\n\nהקובץ הורד למחשב שלך בהצלחה.`);
+          }
+        } catch (error: any) {
+          setUploadStatus('❌ שגיאה בהעלאה');
+          console.error('Upload error:', error);
+          alert(`שגיאה בהעלאה: ${error.message}\n\nהקובץ הורד למחשב שלך בהצלחה.`);
+        }
+      } else {
+        setUploadStatus('⚠️ העלאה לא הוגדרה');
+        console.warn('Upload config not found in environment variables');
+      }
+    }
   };
 
   return (
@@ -288,10 +325,29 @@ function App() {
                  <span className="px-5 py-2 bg-slate-100 text-slate-600 rounded-full font-black text-sm border border-slate-200">{syllabus.length} פרקים</span>
               </div>
             </div>
-            <div className="flex flex-wrap justify-center gap-4">
+            <div className="flex flex-col items-center gap-6">
               <button onClick={exportAllChapters} className="flex items-center gap-4 px-10 py-6 bg-indigo-600 text-white rounded-[2rem] font-black text-xl shadow-2xl shadow-indigo-100 hover:bg-black transition-all active:scale-95">
                 <Package size={26} /> ייצור ויצוא אחוד (ZIP)
               </button>
+
+              {/* Auto-Upload Toggle */}
+              <div className="flex items-center gap-4 bg-slate-50 px-6 py-4 rounded-[2rem] border border-slate-200">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoUploadEnabled}
+                    onChange={(e) => setAutoUploadEnabled(e.target.checked)}
+                    className="w-5 h-5 accent-indigo-600 cursor-pointer"
+                  />
+                  <div className="flex items-center gap-2 font-bold text-sm text-slate-700">
+                    <Upload size={18} />
+                    <span>העלאה אוטומטית ל-bdnhost.net</span>
+                  </div>
+                </label>
+                {uploadStatus && (
+                  <span className="text-xs font-bold px-3 py-1 bg-white rounded-full border border-slate-200">{uploadStatus}</span>
+                )}
+              </div>
             </div>
           </header>
 

@@ -12,7 +12,12 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       define: {
         'process.env.OPENROUTER_API_KEY': JSON.stringify(env.OPENROUTER_API_KEY),
-        'process.env.API_KEY': JSON.stringify(env.OPENROUTER_API_KEY) // Backwards compatibility
+        'process.env.API_KEY': JSON.stringify(env.OPENROUTER_API_KEY), // Backwards compatibility
+        'process.env.CPANEL_HOST': JSON.stringify(env.CPANEL_HOST),
+        'process.env.CPANEL_USERNAME': JSON.stringify(env.CPANEL_USERNAME),
+        'process.env.CPANEL_API_TOKEN': JSON.stringify(env.CPANEL_API_TOKEN),
+        'process.env.CPANEL_TARGET_PATH': JSON.stringify(env.CPANEL_TARGET_PATH),
+        'process.env.AUTO_UPLOAD_ENABLED': JSON.stringify(env.AUTO_UPLOAD_ENABLED)
       },
       resolve: {
         alias: {
