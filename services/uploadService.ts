@@ -4,9 +4,9 @@
  */
 
 export interface UploadConfig {
-  cpanelHost: string;
-  cpanelUsername: string;
-  cpanelApiToken: string;
+  ftpHost: string;
+  ftpUsername: string;
+  ftpPassword: string;
   targetPath: string;
 }
 
