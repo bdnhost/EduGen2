@@ -4,9 +4,9 @@
  */
 
 export interface UploadConfig {
-  ftpHost: string;
-  ftpUsername: string;
-  ftpPassword: string;
+  cpanelHost: string;
+  cpanelUsername: string;
+  cpanelApiToken: string;
   targetPath: string;
 }
 
@@ -48,7 +48,7 @@ export async function uploadToCPanel(
           cpanelHost: config.cpanelHost,
           cpanelUsername: config.cpanelUsername,
           cpanelApiToken: config.cpanelApiToken,
-          targetPath: config.targetPath
+          cpanelTargetPath: config.targetPath
         }
       }),
     });
@@ -109,8 +109,7 @@ export async function testCPanelConnection(config: UploadConfig): Promise<Upload
       body: JSON.stringify({
         cpanelHost: config.cpanelHost,
         cpanelUsername: config.cpanelUsername,
-        cpanelApiToken: config.cpanelApiToken,
-        targetPath: config.targetPath
+        cpanelApiToken: config.cpanelApiToken
       }),
     });
 
@@ -175,7 +174,7 @@ export function getUploadConfig(): UploadConfig | null {
     cpanelUsername: username,
     cpanelApiToken: token,
     targetPath: path
-  };
+  } as UploadConfig;
 }
 
 /**
