@@ -10,18 +10,44 @@ const removeAudioTags = (text: string): string => {
         .trim();
 };
 
+// פונקציה ליצירת SVG מעוצב לפרק
+const generateChapterSVG = (lessonNumber: number, title: string, color: string): string => {
+    const svg = `
+<svg width="800" height="400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad${lessonNumber}" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:${color};stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#818cf8;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="800" height="400" fill="url(#grad${lessonNumber})"/>
+  <circle cx="400" cy="200" r="120" fill="white" opacity="0.1"/>
+  <circle cx="400" cy="200" r="80" fill="white" opacity="0.2"/>
+  <text x="400" y="220" font-family="Heebo, Arial" font-size="72" font-weight="900" text-anchor="middle" fill="white">
+    ${lessonNumber}
+  </text>
+  <rect x="50" y="320" width="700" height="60" rx="10" fill="white" opacity="0.9"/>
+  <text x="400" y="360" font-family="Heebo, Arial" font-size="24" font-weight="700" text-anchor="middle" fill="${color}">
+    ${title.replace(/[<>&"']/g, '')}
+  </text>
+</svg>`.trim();
+
+    return `data:image/svg+xml;base64,${Buffer.from(svg, 'utf-8').toString('base64')}`;
+};
+
 // יצירת HTML לעמוד האינדקס
 export const generateCourseIndexHTML = (courseName: string, syllabus: SyllabusItem[]): string => {
     // יצירת HTML לכל פריט בסילבוס
     const items = syllabus.map(s => {
         const cleanTopic = removeAudioTags(s.topic);
-        // נתיב פשוט לתמונה
-        const imgSrc = `ch${s.lessonNumber}/assets/task_ch${s.lessonNumber}_welcome/media_${s.lessonNumber}.png`;
+
+        // Generate thumbnail SVG
+        const thumbnailSVG = generateChapterSVG(s.lessonNumber, s.title, '#4f46e5');
 
         return `
         <a href="lesson-${s.lessonNumber}.html" class="item-card">
             <div class="thumb-container">
-                <img src="${imgSrc}" alt="${s.title}" class="thumbnail" onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjZjNmNGY2Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgYWxpZ25tZW50LWJhc2VsaW5lPSJtaWRkbGUiIGZpbGw9IiM0ZjQ2ZTUiPiR7cy5sZXNzb25OdW1iZXJ9PC90ZXh0Pjwvc3ZnPg=='">
+                <img src="${thumbnailSVG}" alt="${s.title}" class="thumbnail">
                 <div class="num">${s.lessonNumber}</div>
             </div>
             <div class="info">
@@ -74,7 +100,11 @@ export const generateCourseIndexHTML = (courseName: string, syllabus: SyllabusIt
 // יצירת HTML לדף פרק (assignment)
 export const generateAssignmentHTML = (data: AssignmentData): string => {
     const primary = data.themeColorPrimary || "#4f46e5";
-    const imagePath = `ch${data.lessonNumber}/assets/task_ch${data.lessonNumber}_welcome/media_${data.lessonNumber}.png`;
+
+    // Generate beautiful SVG image directly (no external files needed!)
+    const embeddedImage = generateChapterSVG(data.lessonNumber, data.title, primary);
+
+    // Audio paths - these will work when media files are generated
     const welcomeAudioPath = `ch${data.lessonNumber}/assets/task_ch${data.lessonNumber}_welcome/${data.narration.welcome.fileName}`;
     const caseAudioPath = `ch${data.lessonNumber}/assets/task_ch${data.lessonNumber}_case/${data.narration.caseStudy.fileName}`;
     const summaryAudioPath = `ch${data.lessonNumber}/assets/task_ch${data.lessonNumber}_summary/${data.narration.summary.fileName}`;
@@ -169,7 +199,7 @@ export const generateAssignmentHTML = (data: AssignmentData): string => {
         </div>
 
         <div class="p-40">
-            <img src="${imagePath}" alt="${data.title}" class="chapter-hero-img" onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjQwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMzYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGFsaWdubWVudC1iYXNlbGluZT0ibWlkZGxlIiBmaWxsPSIjNGY0NmU1Ij7XqtefXqvXpMK5JHtkYXRhLnRpdGxlfTwvdGV4dD48L3N2Zz4='">
+            <img src="${embeddedImage}" alt="${data.title}" class="chapter-hero-img">
 
             <div class="section active" id="s0">
                 <h2>${data.welcomeTitle || "ברוכים הבאים לפרק"}</h2>
