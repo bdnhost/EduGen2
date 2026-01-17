@@ -235,9 +235,9 @@ export const generateAssignmentHTML = (data: AssignmentData): string => {
     <script>
         // אחסון הנתיבים של קבצי האודיו השונים
         const audioSources = [
-            { section: 0, path: "${welcomeAudioPath}", label: "הקלטת פתיחה" },
-            { section: 1, path: "${caseAudioPath}", label: "הקלטת המשימה" },
-            { section: 2, path: "${summaryAudioPath}", label: "הקלטת סיכום" }
+            { section: 0, path: ${JSON.stringify(welcomeAudioPath)}, label: "הקלטת פתיחה" },
+            { section: 1, path: ${JSON.stringify(caseAudioPath)}, label: "הקלטת המשימה" },
+            { section: 2, path: ${JSON.stringify(summaryAudioPath)}, label: "הקלטת סיכום" }
         ];
         
         // הגדרת הפונקציות גלובלית
@@ -354,16 +354,16 @@ export const generateAssignmentHTML = (data: AssignmentData): string => {
             submitBtn.disabled = true;
             
             // בונה אובייקט עם הנתונים
-            const data = {
+            const dataToSend = {
                 studentId: studentId,
                 reflection: reflection,
-                course: "${data.courseName}",
+                course: ${JSON.stringify(data.courseName)},
                 lesson: ${data.lessonNumber},
                 timestamp: new Date().toISOString()
             };
             
             // שימולציה של שליחה לשרת
-            console.log("שולח נתונים ל-EDUMANAGE:", JSON.stringify(data, null, 2));
+            console.log("שולח נתונים ל-EDUMANAGE:", JSON.stringify(dataToSend, null, 2));
             
             // נסה לשלוח לשרת אם זה סביבת ייצור
             try {
