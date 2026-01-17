@@ -176,7 +176,7 @@ export const generateAssignmentHTML = (data: AssignmentData): string => {
                 <p>${removeAudioTags(data.welcomeText)}</p>
                 <div class="nav-buttons-container">
                     ${prevLink}
-                    <button class="btn-nav" onclick="window.go(1)">המשך למשימה &larr;</button>
+                    <button class="btn-nav" onclick="go(1)">המשך למשימה &larr;</button>
                 </div>
             </div>
 
@@ -186,8 +186,8 @@ export const generateAssignmentHTML = (data: AssignmentData): string => {
                   ${removeAudioTags(data.caseStudyContent)}
                 </div>
                 <div class="nav-buttons-container">
-                    <button class="btn-secondary" onclick="window.go(0)">← חזרה</button>
-                    <button class="btn-nav" onclick="window.go(2)">לסיכום והגשה &larr;</button>
+                    <button class="btn-secondary" onclick="go(0)">← חזרה</button>
+                    <button class="btn-nav" onclick="go(2)">לסיכום והגשה &larr;</button>
                 </div>
             </div>
 
@@ -210,8 +210,8 @@ export const generateAssignmentHTML = (data: AssignmentData): string => {
                         </div>
                     </div>
                     <div class="nav-buttons-container">
-                        <button type="button" class="btn-secondary" onclick="window.go(1)">← חזרה</button>
-                        <button type="button" class="btn-submit" id="submitBtn" onclick="window.submitData()">שלח ושמור התקדמות ✅</button>
+                        <button type="button" class="btn-secondary" onclick="go(1)">← חזרה</button>
+                        <button type="button" class="btn-submit" id="submitBtn" onclick="submitData()">שלח ושמור התקדמות ✅</button>
                     </div>
                 </form>
             </div>
@@ -241,7 +241,7 @@ export const generateAssignmentHTML = (data: AssignmentData): string => {
         ];
         
         // הגדרת הפונקציות גלובלית
-        window.go = function(idx) {
+        function go(idx) {
             const sections = document.querySelectorAll('.section');
             for (let i = 0; i < sections.length; i++) {
                 sections[i].classList.remove('active');
@@ -250,11 +250,11 @@ export const generateAssignmentHTML = (data: AssignmentData): string => {
             window.scrollTo(0, 0);
             
             // טעינת אודיו מתאים למסך החדש
-            window.loadAudioForSection(idx);
-        };
+            loadAudioForSection(idx);
+        }
         
         // פונקציה להחלפת מקור האודיו
-        window.loadAudioForSection = function(sectionIndex) {
+        function loadAudioForSection(sectionIndex) {
             const audio = document.getElementById('audio');
             const source = document.getElementById('aSrc');
             const audioLabel = document.getElementById('audioLabel');
@@ -293,16 +293,16 @@ export const generateAssignmentHTML = (data: AssignmentData): string => {
                 
                 // הפעלה אוטומטית לאחר השהייה קצרה
                 setTimeout(() => {
-                    window.playAudio();
+                    playAudio();
                 }, 500);
             } catch (e) {
                 console.error("Error loading audio:", e);
                 btn.style.backgroundColor = '#ef4444';
             }
-        };
-        
+        }
+
         // פונקציה לניגון אודיו
-        window.playAudio = function() {
+        function playAudio() {
             const audio = document.getElementById('audio');
             const btn = document.getElementById('pBtn');
             
@@ -340,10 +340,10 @@ export const generateAssignmentHTML = (data: AssignmentData): string => {
                 btn.innerHTML = '▶';
                 audio.currentTime = 0;
             };
-        };
-        
+        }
+
         // פונקציה לשליחת הנתונים
-        window.submitData = function() {
+        function submitData() {
             const studentId = document.getElementById('student_id').value || 'anonymous';
             const reflection = document.getElementById('refl').value || '';
             const submitBtn = document.getElementById('submitBtn');
@@ -386,7 +386,7 @@ export const generateAssignmentHTML = (data: AssignmentData): string => {
                     // מעבר למסך סיום אחרי השהייה קצרה
                     setTimeout(() => {
                         feedbackMsg.classList.remove('show');
-                        window.go(3); // מעבר למסך סיום
+                        go(3); // מעבר למסך סיום
                     }, 3000);
                 }, 1500);
                 
@@ -396,8 +396,8 @@ export const generateAssignmentHTML = (data: AssignmentData): string => {
                 submitBtn.style.backgroundColor = "#ef4444";
                 submitBtn.disabled = false;
             }
-        };
-        
+        }
+
         // טעינה ראשונית
         window.onload = function() {
             const audio = document.getElementById('audio');
