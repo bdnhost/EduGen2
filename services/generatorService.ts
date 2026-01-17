@@ -32,7 +32,8 @@ const generateChapterSVG = (lessonNumber: number, title: string, color: string):
   </text>
 </svg>`.trim();
 
-    return `data:image/svg+xml;base64,${Buffer.from(svg, 'utf-8').toString('base64')}`;
+    // Use btoa() for browser compatibility instead of Buffer
+    return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
 };
 
 // יצירת HTML לעמוד האינדקס
