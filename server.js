@@ -1,13 +1,13 @@
 /**
- * EduGen2 Proxy Server
- * Handles cPanel API requests to avoid CORS issues in browser
+ * EduGen2 Proxy Server with FTP Upload
+ * Uploads courses via FTP instead of cPanel API (simpler and more reliable)
  */
 
 import express from 'express';
 import cors from 'cors';
-import FormData from 'form-data';
-import fetch from 'node-fetch';
+import { Client } from 'basic-ftp';
 import { config } from 'dotenv';
+import { Readable } from 'stream';
 
 // Load environment variables
 config();
@@ -17,7 +17,7 @@ const PORT = process.env.PROXY_PORT || 3002;
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' })); // Support large ZIP files
+app.use(express.json({ limit: '50mb' }));
 
 /**
  * Health check endpoint
@@ -25,364 +25,160 @@ app.use(express.json({ limit: '50mb' })); // Support large ZIP files
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    message: 'EduGen2 Proxy Server is running',
+    message: 'EduGen2 Proxy Server (FTP) is running',
     timestamp: new Date().toISOString()
   });
 });
 
 /**
- * Test cPanel connection
+ * Test FTP connection
  */
-app.post('/api/test-cpanel', async (req, res) => {
-  try {
-    const { cpanelHost, cpanelUsername, cpanelApiToken, targetPath } = req.body;
+app.post('/api/test-ftp', async (req, res) => {
+  const client = new Client();
+  client.ftp.verbose = true;
 
-    if (!cpanelHost || !cpanelUsername || !cpanelApiToken) {
+  try {
+    const { ftpHost, ftpUsername, ftpPassword, targetPath } = req.body;
+
+    if (!ftpHost || !ftpUsername || !ftpPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required cPanel credentials'
+        message: 'Missing required FTP credentials'
       });
     }
 
-    const auth = Buffer.from(`${cpanelUsername}:${cpanelApiToken}`).toString('base64');
-    const url = `https://${cpanelHost}:2083/execute/Fileman/list_files?dir=/${targetPath || 'public_html/Resources'}`;
+    console.log(`[FTP Test] Connecting to ${ftpHost}...`);
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${auth}`
-      }
+    await client.access({
+      host: ftpHost,
+      user: ftpUsername,
+      password: ftpPassword,
+      secure: false // Most cPanel FTP uses port 21 (not secure FTP)
     });
 
-    if (!response.ok) {
-      throw new Error(`cPanel API returned ${response.status}: ${response.statusText}`);
-    }
+    console.log('[FTP Test] Connected successfully');
 
-    const result = await response.json();
+    // Try to list files in target directory
+    const targetDir = `/${targetPath}`;
+    await client.ensureDir(targetDir);
+    const files = await client.list(targetDir);
 
-    if (result.errors && result.errors.length > 0) {
-      throw new Error(result.errors[0]);
-    }
+    console.log(`[FTP Test] Found ${files.length} files in ${targetDir}`);
 
     res.json({
       success: true,
-      message: 'חיבור ל-cPanel הצליח! ✅',
-      filesCount: result.data ? result.data.length : 0
+      message: `חיבור FTP הצליח! נמצאו ${files.length} קבצים.`,
+      filesCount: files.length
     });
   } catch (error) {
-    console.error('Test connection error:', error);
+    console.error('[FTP Test] Error:', error);
     res.json({
       success: false,
-      message: 'חיבור ל-cPanel נכשל',
+      message: 'חיבור FTP נכשל',
       error: error.message
     });
+  } finally {
+    client.close();
   }
 });
 
 /**
- * Upload ZIP to cPanel
+ * Upload course via FTP (complete workflow)
  */
-app.post('/api/upload-zip', async (req, res) => {
-  try {
-    const { zipBase64, courseName, cpanelHost, cpanelUsername, cpanelApiToken, targetPath } = req.body;
+app.post('/api/upload-course-ftp', async (req, res) => {
+  const client = new Client();
+  client.ftp.verbose = true;
 
-    if (!zipBase64 || !courseName || !cpanelHost || !cpanelUsername || !cpanelApiToken) {
+  try {
+    const { zipBase64, courseName, config: ftpConfig } = req.body;
+
+    if (!zipBase64 || !courseName || !ftpConfig) {
       return res.status(400).json({
         success: false,
         message: 'Missing required parameters'
       });
     }
 
-    console.log(`[Upload] Starting upload of ${courseName}...`);
+    console.log(`[FTP Upload] Starting upload of ${courseName}...`);
 
     // Convert base64 to buffer
     const zipBuffer = Buffer.from(zipBase64, 'base64');
+    console.log(`[FTP Upload] ZIP size: ${(zipBuffer.length / 1024 / 1024).toFixed(2)} MB`);
 
-    // Create form data
-    const formData = new FormData();
-    formData.append('file-0', zipBuffer, {
-      filename: `${courseName}.zip`,
-      contentType: 'application/zip'
+    // Connect to FTP
+    console.log(`[FTP Upload] Connecting to ${ftpConfig.ftpHost}...`);
+    await client.access({
+      host: ftpConfig.ftpHost,
+      user: ftpConfig.ftpUsername,
+      password: ftpConfig.ftpPassword,
+      secure: false
     });
-    formData.append('dir', `/${targetPath}`);
-    formData.append('overwrite', '1');
+    console.log('[FTP Upload] Connected to FTP server');
 
-    const auth = Buffer.from(`${cpanelUsername}:${cpanelApiToken}`).toString('base64');
-    const uploadUrl = `https://${cpanelHost}:2083/execute/Fileman/upload_files`;
+    // Ensure target directory exists
+    const targetDir = `/${ftpConfig.targetPath}`;
+    await client.ensureDir(targetDir);
+    console.log(`[FTP Upload] Target directory ready: ${targetDir}`);
 
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        ...formData.getHeaders()
-      },
-      body: formData
-    });
+    // Upload ZIP file
+    const zipFileName = `${courseName}.zip`;
+    const zipPath = `${targetDir}/${zipFileName}`;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Upload failed: ${response.status} - ${errorText}`);
-    }
+    console.log(`[FTP Upload] Uploading ${zipFileName}...`);
+    const readable = Readable.from(zipBuffer);
+    await client.uploadFrom(readable, zipPath);
+    console.log(`[FTP Upload] ✅ ZIP uploaded successfully to ${zipPath}`);
 
-    const result = await response.json();
+    // Create extraction directory
+    const extractDir = `${targetDir}/${courseName}`;
+    await client.ensureDir(extractDir);
+    console.log(`[FTP Upload] Created directory: ${extractDir}`);
 
-    if (result.errors && result.errors.length > 0) {
-      throw new Error(result.errors[0]);
-    }
-
-    console.log(`[Upload] ✅ ZIP uploaded successfully`);
+    // Note: We can't extract ZIP via FTP directly
+    // User will need to extract via cPanel File Manager or use shell access
+    console.log('[FTP Upload] ⚠️ Manual extraction required via cPanel File Manager');
 
     res.json({
       success: true,
-      message: 'ZIP uploaded successfully'
+      message: `קורס "${courseName}" הועלה בהצלחה!\n\nשלבים נוספים:\n1. התחבר ל-cPanel File Manager\n2. נווט ל-${targetDir}\n3. לחיצה ימנית על ${zipFileName} → Extract\n4. הקורס יהיה זמין ב-https://bdnhost.net/Resources/${courseName}/`,
+      uploadPath: zipPath,
+      manualExtractionRequired: true,
+      extractionInstructions: [
+        `התחבר ל-cPanel: https://shlomi.online:2083`,
+        `File Manager → ${targetDir}`,
+        `לחיצה ימנית על ${zipFileName} → Extract`,
+        `בחר תיקייה: ${extractDir}`,
+        `מחק את ה-ZIP לאחר חילוץ (אופציונלי)`
+      ]
     });
   } catch (error) {
-    console.error('[Upload] Error:', error);
+    console.error('[FTP Upload] Error:', error);
     res.json({
       success: false,
-      message: 'העלאת הקובץ נכשלה',
+      message: 'העלאת FTP נכשלה',
       error: error.message
     });
+  } finally {
+    client.close();
   }
 });
 
 /**
- * Extract ZIP on server
- */
-app.post('/api/extract-zip', async (req, res) => {
-  try {
-    const { courseName, cpanelHost, cpanelUsername, cpanelApiToken, targetPath } = req.body;
-
-    if (!courseName || !cpanelHost || !cpanelUsername || !cpanelApiToken) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required parameters'
-      });
-    }
-
-    console.log(`[Extract] Extracting ${courseName}.zip...`);
-
-    const auth = Buffer.from(`${cpanelUsername}:${cpanelApiToken}`).toString('base64');
-    const params = new URLSearchParams({
-      'file': `/${targetPath}/${courseName}.zip`,
-      'dir': `/${targetPath}/${courseName}`,
-      'overwrite': '1'
-    });
-
-    const extractUrl = `https://${cpanelHost}:2083/execute/Fileman/extract_files?${params.toString()}`;
-
-    const response = await fetch(extractUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${auth}`
-      }
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Extract failed: ${response.status} - ${errorText}`);
-    }
-
-    const result = await response.json();
-
-    if (result.errors && result.errors.length > 0) {
-      throw new Error(result.errors[0]);
-    }
-
-    console.log(`[Extract] ✅ ZIP extracted successfully`);
-
-    res.json({
-      success: true,
-      message: 'ZIP extracted successfully'
-    });
-  } catch (error) {
-    console.error('[Extract] Error:', error);
-    res.json({
-      success: false,
-      message: 'חילוץ הקבצים נכשל',
-      error: error.message
-    });
-  }
-});
-
-/**
- * Delete ZIP file after extraction
- */
-app.post('/api/delete-zip', async (req, res) => {
-  try {
-    const { courseName, cpanelHost, cpanelUsername, cpanelApiToken, targetPath } = req.body;
-
-    if (!courseName || !cpanelHost || !cpanelUsername || !cpanelApiToken) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required parameters'
-      });
-    }
-
-    console.log(`[Delete] Cleaning up ${courseName}.zip...`);
-
-    const auth = Buffer.from(`${cpanelUsername}:${cpanelApiToken}`).toString('base64');
-    const params = new URLSearchParams({
-      'file': `/${targetPath}/${courseName}.zip`
-    });
-
-    const deleteUrl = `https://${cpanelHost}:2083/execute/Fileman/delete_files?${params.toString()}`;
-
-    const response = await fetch(deleteUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${auth}`
-      }
-    });
-
-    if (!response.ok) {
-      console.warn('[Delete] Could not delete ZIP, but extraction succeeded');
-      return res.json({
-        success: true,
-        message: 'Cleanup skipped (non-critical)'
-      });
-    }
-
-    console.log(`[Delete] ✅ ZIP deleted (cleanup))`);
-
-    res.json({
-      success: true,
-      message: 'ZIP deleted successfully'
-    });
-  } catch (error) {
-    console.warn('[Delete] Cleanup failed, but upload succeeded:', error);
-    res.json({
-      success: true,
-      message: 'Cleanup failed but upload OK'
-    });
-  }
-});
-
-/**
- * Complete upload workflow (upload → extract → cleanup)
+ * Legacy endpoint for backward compatibility (now uses FTP)
  */
 app.post('/api/upload-course', async (req, res) => {
-  try {
-    const { zipBase64, courseName, config } = req.body;
-
-    if (!zipBase64 || !courseName || !config) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required parameters'
-      });
-    }
-
-    console.log(`[Workflow] Starting complete upload for ${courseName}...`);
-
-    // Step 1: Upload ZIP
-    const uploadResult = await executeUpload(zipBase64, courseName, config);
-    if (!uploadResult.success) {
-      return res.json(uploadResult);
-    }
-
-    // Step 2: Extract ZIP
-    const extractResult = await executeExtract(courseName, config);
-    if (!extractResult.success) {
-      return res.json(extractResult);
-    }
-
-    // Step 3: Delete ZIP (non-critical)
-    await executeDelete(courseName, config);
-
-    console.log(`[Workflow] ✅ Complete! Course available at: https://bdnhost.net/Resources/${courseName}/`);
-
-    res.json({
-      success: true,
-      message: `קורס "${courseName}" הועלה בהצלחה ל-https://bdnhost.net/Resources/${courseName}/`,
-      url: `https://bdnhost.net/Resources/${courseName}/`
-    });
-  } catch (error) {
-    console.error('[Workflow] Error:', error);
-    res.json({
-      success: false,
-      message: 'העלאה נכשלה',
-      error: error.message
-    });
-  }
+  // Redirect to FTP upload
+  return app.handle(
+    { ...req, url: '/api/upload-course-ftp', originalUrl: '/api/upload-course-ftp' },
+    res
+  );
 });
-
-// Helper functions for workflow
-async function executeUpload(zipBase64, courseName, config) {
-  const zipBuffer = Buffer.from(zipBase64, 'base64');
-  const formData = new FormData();
-  formData.append('file-0', zipBuffer, {
-    filename: `${courseName}.zip`,
-    contentType: 'application/zip'
-  });
-  formData.append('dir', `/${config.targetPath}`);
-  formData.append('overwrite', '1');
-
-  const auth = Buffer.from(`${config.cpanelUsername}:${config.cpanelApiToken}`).toString('base64');
-  const response = await fetch(`https://${config.cpanelHost}:2083/execute/Fileman/upload_files`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${auth}`,
-      ...formData.getHeaders()
-    },
-    body: formData
-  });
-
-  if (!response.ok) {
-    throw new Error(`Upload failed: ${response.status}`);
-  }
-
-  const result = await response.json();
-  if (result.errors && result.errors.length > 0) {
-    throw new Error(result.errors[0]);
-  }
-
-  return { success: true };
-}
-
-async function executeExtract(courseName, config) {
-  const auth = Buffer.from(`${config.cpanelUsername}:${config.cpanelApiToken}`).toString('base64');
-  const params = new URLSearchParams({
-    'file': `/${config.targetPath}/${courseName}.zip`,
-    'dir': `/${config.targetPath}/${courseName}`,
-    'overwrite': '1'
-  });
-
-  const response = await fetch(`https://${config.cpanelHost}:2083/execute/Fileman/extract_files?${params.toString()}`, {
-    method: 'GET',
-    headers: { 'Authorization': `Basic ${auth}` }
-  });
-
-  if (!response.ok) {
-    throw new Error(`Extract failed: ${response.status}`);
-  }
-
-  const result = await response.json();
-  if (result.errors && result.errors.length > 0) {
-    throw new Error(result.errors[0]);
-  }
-
-  return { success: true };
-}
-
-async function executeDelete(courseName, config) {
-  try {
-    const auth = Buffer.from(`${config.cpanelUsername}:${config.cpanelApiToken}`).toString('base64');
-    const params = new URLSearchParams({
-      'file': `/${config.targetPath}/${courseName}.zip`
-    });
-
-    await fetch(`https://${config.cpanelHost}:2083/execute/Fileman/delete_files?${params.toString()}`, {
-      method: 'GET',
-      headers: { 'Authorization': `Basic ${auth}` }
-    });
-  } catch (error) {
-    console.warn('[Delete] Non-critical cleanup error:', error);
-  }
-}
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`\n🚀 EduGen2 Proxy Server running on http://localhost:${PORT}`);
+  console.log(`\n🚀 EduGen2 Proxy Server (FTP Mode) running on http://localhost:${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/health`);
-  console.log(`   Ready to proxy cPanel uploads!\n`);
+  console.log(`   Ready to upload via FTP!\n`);
+  console.log(`   ℹ️  Note: ZIP files will be uploaded but require manual extraction via cPanel`);
+  console.log(`   📖 See PROXY_SETUP.md for details\n`);
 });
