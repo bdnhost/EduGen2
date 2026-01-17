@@ -20,6 +20,24 @@ const MODELS = {
   STUDENT_INSIGHTS: "anthropic/claude-3.5-sonnet"    // Alternative: "google/gemini-pro-1.5"
 };
 
+// System prompts for different model purposes
+const SYSTEM_PROMPTS = {
+  CONTENT_GENERATION: `You are a World-Class Instructional Designer and Educational Content Architect specializing in creating rich, immersive learning experiences for non-technical users.
+
+Your mission is NEVER to produce a "skeleton". Every piece of content must be a Masterpiece with these requirements:
+
+1. The Clerk Test: Ensure an office clerk with zero technical background can follow every instruction step-by-step.
+2. Instructional Scaffolding: Break complex ideas into micro-concepts. Build difficulty gradually.
+3. Real-world Context: Every technical concept must include a real-world metaphor and practical example.
+4. Enforced Interactivity: Every 3-4 content blocks must include a Quiz or Flashcard. This is non-negotiable.
+5. Pro-Tip Layer: Every topic must contain expert-level insights that add value beyond basics.
+6. Verbosity: Be richly descriptive. A "powerful feature" should be explained in 150+ words with concrete examples.
+
+If your content feels like a premium course rather than a cheap summary, you've succeeded. Remember: Be the bridge between complete novice and professional expert.`,
+  TREND_DISCOVERY: "You are an expert trend analyst specializing in educational and technological developments. Your insights should balance current relevance with timeless value.",
+  STUDENT_INSIGHTS: "You are a supportive, encouraging educational mentor specializing in personalized feedback. Always remain positive while providing actionable guidance."
+};
+
 /**
  * Helper function to parse JSON from LLM response
  */
@@ -108,7 +126,7 @@ export const generateStudentInsight = async (state: StudentState, courseName: st
   try {
     const prompt = `אתה מומחה פדגוגי מעודד ותומך.
 
-נתח את ההתקדמות של סטודנט בקורס "${courseName}":
+נתח את ההתקדמות של סטודנט במדריך הקצר "${courseName}":
 - התקדמות כללית: ${state.overall_progress}%
 - מומנטום למידה: ${state.momentum}/100
 
@@ -139,7 +157,7 @@ export const generateStudentInsight = async (state: StudentState, courseName: st
  */
 export const generateSyllabus = async (guideTopic: string): Promise<{ syllabus: SyllabusItem[], englishTitle: string }> => {
   try {
-    const prompt = `צור סילבוס פדגוגי מקצועי לקורס בשם: "${guideTopic}" בעברית.
+    const prompt = `צור סילבוס פדגוגי מקצועי למדריך קצר בשם: "${guideTopic}" בעברית.
 
 דרישות:
 - 5 פרקים (chapters)
@@ -207,14 +225,38 @@ export const generateAssignmentFromTopic = async (
   lessonNumber: number,
   totalLessons: number
 ): Promise<AssignmentData> => {
-  const prompt = `צור תוכן חינוכי אינטראקטיבי מלא בעברית לפרק ${lessonNumber} מתוך ${totalLessons} בקורס "${courseName}".
+  const prompt = `צור תוכן חינוכי עמוק ומעשי בעברית לפרק ${lessonNumber} מתוך ${totalLessons} במדריך "${courseName}".
 נושא: "${topic}".
 
-דרישות:
-- שפה: עברית בלבד
-- סגנון: מקצועי ומעודד
-- פדגוגיה: Bloom's Taxonomy, Scaffolding
-- נרטיב: כלול סמני רגש כמו [excited], [thoughtful], [pauses]
+תזכורת חשובה - הימנע בכל מחיר מ"סינדרום השלד"! אל תיצור רק מבנה מוכן - מלא אותו בתוכן עשיר, מעמיק, ומקצועי.
+
+עקרונות פדגוגיים מחייבים:
+1. מבחן הפקידה: תארי לעצמך פקידה ללא רקע טכני. האם היא תוכל לבצע את המשימה בדיוק לפי ההוראות שלך? אם לא, הוסף הסברים מפורטים יותר, צילומי מסך מתוארים, ושלבים מדויקים.
+
+2. פיגומי למידה: פרק כל רעיון מורכב למיקרו-מושגים. הסבר כל מושג בנפרד עם מטאפורה מעולם המשרד.
+
+3. דוגמאות אמיתיות: אל תשתמש במשפטים כלליים כמו "הטרמינל עוצמתי" - במקום זאת, כתוב: "בעזרת פקודת mkdir אחת, יצרת הרגע 12 תיקיות חודשיות עם תתי-תיקיות לכל ימי השבוע. זה ייקח שעתיים בגרירת עכבר."
+
+4. אינטראקטיביות מחייבת: כל 2-3 שקפי תוכן חייבים להסתיים בשקף Quiz או כרטיסיית פלאש. ליצירת Flashcards יש לכלול לפחות 5 מושגים מקצועיים.
+
+5. שכבת מומחה: כל סעיף חייב לכלול תיבת "טיפ מקצועי" או "האם ידעת?" שמוסיפה מידע ברמת מומחה מעבר למידע הבסיסי.
+
+נרטיב ושפה:
+- כלול סמני רגש כמו [excited], [thoughtful], [pauses], [smiles], [whispers] (לטיפים), [speaks firmly] (להדגשות)
+- חובה להשתמש בסימן "..." בין משפטים לציון הפסקות נשימה טבעיות
+- TV-Anchor Test: תארי לעצמך שאת מנחה תוכנית טלוויזיה ולא סתם קריינית. הקול והנימה חייבים "לתפוס" את המשתמש
+- Cross-Checking: עבור כל חלק שכתבת שאלי את עצמך: "האם זהו חלק ממדריך יוקרתי ומעמיק, או סתם תקציר זול?"
+
+הנחיות למדיה חזותית:
+- כל media_prompt חייב להיות ב-English ולהכיל את המילים "Strictly 2D Flat Vector Infographic"
+- לתיאור המדיה בכל שקף, ציין את התוכן הטכני הספציפי שצריך להופיע באינפוגרפיקה
+- דוגמה לפרומפט טוב: "Strictly 2D Flat Vector Infographic showing step-by-step Excel AutoFilter process, with cursor hovering over filter icon, purple/pink color scheme, white background, clean lines"
+
+הנחיות סגנון נרטיב לפי התקדמות במדריך:
+- פרק 1: סגנון מקצועי-חם, פתיחה מזמינה אך סמכותית, בלי "ברוכים הבאים" שגרתי.
+- פרקי אמצע: סגנון ישיר, ממוקד ומעשי, עם דוגמאות קונקרטיות.
+- פרקים מתקדמים: ידידותי, עם הומור מקצועי והערות אישיות.
+- פרק אחרון: אישי, מעצים, מסכם עם תחושת התקדמות והישג.
 
 החזר JSON בפורמט הבא (כל השדות חובה):
 
@@ -299,7 +341,7 @@ export const generateAssignmentFromTopic = async (
       messages: [
         {
           role: "system",
-          content: "You are an expert educational content creator specializing in interactive Hebrew assignments. Always return valid JSON with ALL required fields."
+          content: SYSTEM_PROMPTS.CONTENT_GENERATION
         },
         {
           role: "user",
@@ -324,6 +366,22 @@ export const generateAssignmentFromTopic = async (
     data.narration.caseStudy.fileName = `audio_ch${lessonNumber}_case.mp3`;
     data.narration.summary.fileName = `audio_ch${lessonNumber}_summary.mp3`;
 
+    // Process narration scripts to ensure they include proper pauses and markers
+    ['welcome', 'caseStudy', 'summary'].forEach((part) => {
+      if (data.narration[part] && data.narration[part].script) {
+        // Make sure scripts contain at least one emotional marker if not present
+        if (!data.narration[part].script.includes('[')) {
+          data.narration[part].script = `[thoughtful] ${data.narration[part].script}`;
+        }
+
+        // Ensure natural pauses with ... are present
+        if (!data.narration[part].script.includes('...')) {
+          // Add some natural pauses at sentence endings
+          data.narration[part].script = data.narration[part].script.replace(/\. /g, '... ');
+        }
+      }
+    });
+
     // Add ElevenLabs configuration
     ['welcome', 'caseStudy', 'summary'].forEach((part) => {
       if (data.narration[part]) {
@@ -342,6 +400,22 @@ export const generateAssignmentFromTopic = async (
         id: `q${i}_o${j}`
       }))
     }));
+
+    // Add rich flashcards structure if not present
+    if (!data.richFlashcards && data.flashcards && data.flashcards.length > 0) {
+      data.richFlashcards = data.flashcards.map((f: any) => ({
+        term: f.term || "",
+        definition: f.definition || "",
+        realWorldExample: `דוגמה מעשית ל${f.term}`,
+        commonMistake: `טעות נפוצה: לא להבין את ההקשר המלא של ${f.term}`,
+        proTip: `טיפ מקצועי: כדאי להשתמש ב${f.term} במצבים של...`
+      }));
+    }
+
+    // Set imagePrompt to ensure 2D Flat Vector style if not specific enough
+    if (data.imagePrompt && !data.imagePrompt.includes("Flat Vector")) {
+      data.imagePrompt = `Strictly 2D Flat Vector Infographic showing ${data.imagePrompt}, with purple/pink color scheme, white background, clean lines`;
+    }
 
     return data as AssignmentData;
   } catch (error) {
