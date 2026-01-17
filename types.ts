@@ -1,4 +1,3 @@
-
 export interface QuestionOption {
   id: string;
   text: string;
@@ -21,6 +20,59 @@ export interface Flashcard {
   definition: string;
 }
 
+// הוספת כרטיסיות עשירות יותר עם דוגמאות מעשיות וטיפים
+export interface RichFlashcard {
+  term: string;
+  definition: string;
+  realWorldExample: string;
+  commonMistake: string;
+  proTip: string;
+}
+
+// מדריך צעד-אחר-צעד
+export interface StepByStepGuideStep {
+  number: number;
+  title: string;
+  description: string;
+  visualDescription: string;
+  watchOutFor?: string;
+}
+
+export interface StepByStepGuide {
+  title: string;
+  goal: string;
+  difficultyLevel: 'מתחילים' | 'בינוני' | 'מתקדם';
+  prerequisites: string[];
+  steps: StepByStepGuideStep[];
+  verificationStep: string;
+}
+
+// תרחישי אתגר עם פתרונות מומחים
+export interface ChallengeScenario {
+  title: string;
+  situation: string;
+  challenge: string;
+  expertApproach: string;
+  bestPractices: string[];
+}
+
+// משאבים חיצוניים
+export interface ExternalResource {
+  title: string;
+  type: 'video' | 'article' | 'downloadable_template' | 'tool';
+  url: string;
+  description: string;
+  durationMinutes?: number;
+}
+
+// תבנית להורדה
+export interface DownloadableTemplate {
+  title: string;
+  fileType: string;
+  downloadPath: string;
+  instructions: string;
+}
+
 export interface NarrationPart {
   fileName: string;
   script: string;
@@ -41,6 +93,22 @@ export interface PedagogicalReview {
   engagementStrategy: string;
   instructionalRationale: string;
   suggestedImprovement: string;
+}
+
+// מטא-נתונים פדגוגיים משופרים
+export interface PedagogicalMetadata {
+  bloomsLevel: string;
+  learningStyles: string[];
+  estimatedCompletionTimeMinutes: number;
+  prerequisiteKnowledge: string[];
+  knowledgeGraph: {
+    centralConcept: string;
+    relatedConcepts: {
+      name: string;
+      relationship: string;
+      importanceLevel: number;
+    }[];
+  };
 }
 
 export interface SyllabusItem {
@@ -69,6 +137,13 @@ export interface AssignmentData {
   totalLessons: number;
   nextLessonTeaser?: string;
   flashcards: Flashcard[];
+  // הוספת שדות חדשים
+  richFlashcards?: RichFlashcard[];
+  stepByStepGuides?: StepByStepGuide[];
+  challengeScenarios?: ChallengeScenario[];
+  externalResources?: ExternalResource[];
+  downloadableTemplates?: DownloadableTemplate[];
+  pedagogicalMetadata?: PedagogicalMetadata;
   welcomeTitle: string;
   welcomeText: string;
   objectives: string[];

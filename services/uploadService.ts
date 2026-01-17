@@ -1,24 +1,28 @@
 /**
- * cPanel Upload Service
- * Automatically uploads generated course folders to bdnhost.net/Resources/
+ * cPanel Upload Service (via Proxy Server)
+ * Uploads generated courses to bdnhost.net/Resources/ through a proxy to avoid CORS issues
  */
 
 export interface UploadConfig {
-  cpanelHost: string;
-  cpanelUsername: string;
-  cpanelApiToken: string;
-  targetPath: string; // Path relative to /home4/shlomion/ (e.g., "public_html/Resources")
+  ftpHost: string;
+  ftpUsername: string;
+  ftpPassword: string;
+  targetPath: string;
 }
 
 export interface UploadResult {
   success: boolean;
   message: string;
-  uploadedFiles?: string[];
+  url?: string;
   error?: string;
 }
 
+// Proxy server URL (local backend)
+const PROXY_URL = process.env.PROXY_URL || 'http://localhost:3002';
+
 /**
- * Upload a ZIP file directly to cPanel using the File Manager API (UAPI)
+ * Upload a ZIP file to cPanel via proxy server
+ * This avoids CORS issues by routing through a local Node.js backend
  */
 export async function uploadToCPanel(
   zipBlob: Blob,
@@ -26,30 +30,62 @@ export async function uploadToCPanel(
   config: UploadConfig
 ): Promise<UploadResult> {
   try {
-    console.log(`[Upload] Starting upload of ${courseName} to cPanel...`);
+    console.log(`[Upload] Starting upload of ${courseName} via proxy...`);
 
-    // Step 1: Upload the ZIP file
-    const uploadResult = await uploadZipFile(zipBlob, courseName, config);
-    if (!uploadResult.success) {
-      return uploadResult;
+    // Convert Blob to Base64 for transmission
+    const zipBase64 = await blobToBase64(zipBlob);
+
+    // Call proxy server endpoint
+    const response = await fetch(`${PROXY_URL}/api/upload-course`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        zipBase64,
+        courseName,
+        config: {
+          cpanelHost: config.cpanelHost,
+          cpanelUsername: config.cpanelUsername,
+          cpanelApiToken: config.cpanelApiToken,
+          targetPath: config.targetPath
+        }
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Proxy server returned ${response.status}: ${response.statusText}`);
     }
 
-    // Step 2: Extract the ZIP on the server
-    const extractResult = await extractZipOnServer(courseName, config);
-    if (!extractResult.success) {
-      return extractResult;
+    const result = await response.json();
+
+    if (result.success) {
+      console.log(`[Upload] ✅ Success! Course available at: ${result.url}`);
+      return {
+        success: true,
+        message: result.message,
+        url: result.url
+      };
+    } else {
+      console.error('[Upload] Failed:', result.error);
+      return {
+        success: false,
+        message: result.message || 'העלאה נכשלה',
+        error: result.error
+      };
     }
-
-    // Step 3: Clean up the ZIP file (optional)
-    await deleteZipFile(courseName, config);
-
-    return {
-      success: true,
-      message: `קורס "${courseName}" הועלה בהצלחה ל-https://bdnhost.net/Resources/${courseName}/`,
-      uploadedFiles: [`${courseName}.zip`]
-    };
   } catch (error: any) {
     console.error('[Upload] Error:', error);
+
+    // Check if proxy server is running
+    if (error.message.includes('Failed to fetch') || error.message.includes('ECONNREFUSED')) {
+      return {
+        success: false,
+        message: 'שרת ה-Proxy לא רץ',
+        error: 'הרץ את שרת ה-Proxy עם: npm run server'
+      };
+    }
+
     return {
       success: false,
       message: 'העלאה נכשלה',
@@ -59,178 +95,65 @@ export async function uploadToCPanel(
 }
 
 /**
- * Upload ZIP file using cPanel UAPI - Fileman::upload_files
- */
-async function uploadZipFile(
-  zipBlob: Blob,
-  courseName: string,
-  config: UploadConfig
-): Promise<UploadResult> {
-  try {
-    const formData = new FormData();
-    formData.append('file-0', zipBlob, `${courseName}.zip`);
-    formData.append('dir', `/${config.targetPath}`);
-    formData.append('overwrite', '1'); // Overwrite if exists
-
-    const auth = btoa(`${config.cpanelUsername}:${config.cpanelApiToken}`);
-
-    const response = await fetch(
-      `https://${config.cpanelHost}:2083/execute/Fileman/upload_files`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-        },
-        body: formData,
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Upload failed: ${response.status} - ${errorText}`);
-    }
-
-    const result = await response.json();
-
-    if (result.errors && result.errors.length > 0) {
-      throw new Error(result.errors[0]);
-    }
-
-    console.log('[Upload] ZIP file uploaded successfully');
-    return { success: true, message: 'ZIP uploaded' };
-  } catch (error: any) {
-    return {
-      success: false,
-      message: 'העלאת הקובץ נכשלה',
-      error: error.message
-    };
-  }
-}
-
-/**
- * Extract ZIP file on server using cPanel UAPI - Fileman::extract_files
- */
-async function extractZipOnServer(
-  courseName: string,
-  config: UploadConfig
-): Promise<UploadResult> {
-  try {
-    const auth = btoa(`${config.cpanelUsername}:${config.cpanelApiToken}`);
-
-    const params = new URLSearchParams({
-      'file': `/${config.targetPath}/${courseName}.zip`,
-      'dir': `/${config.targetPath}/${courseName}`,
-      'overwrite': '1'
-    });
-
-    const response = await fetch(
-      `https://${config.cpanelHost}:2083/execute/Fileman/extract_files?${params.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Extract failed: ${response.status} - ${errorText}`);
-    }
-
-    const result = await response.json();
-
-    if (result.errors && result.errors.length > 0) {
-      throw new Error(result.errors[0]);
-    }
-
-    console.log('[Upload] ZIP file extracted successfully');
-    return { success: true, message: 'ZIP extracted' };
-  } catch (error: any) {
-    return {
-      success: false,
-      message: 'חילוץ הקבצים נכשל',
-      error: error.message
-    };
-  }
-}
-
-/**
- * Delete ZIP file after extraction using cPanel UAPI - Fileman::delete_files
- */
-async function deleteZipFile(
-  courseName: string,
-  config: UploadConfig
-): Promise<UploadResult> {
-  try {
-    const auth = btoa(`${config.cpanelUsername}:${config.cpanelApiToken}`);
-
-    const params = new URLSearchParams({
-      'file': `/${config.targetPath}/${courseName}.zip`,
-    });
-
-    const response = await fetch(
-      `https://${config.cpanelHost}:2083/execute/Fileman/delete_files?${params.toString()}`,
-      {
-        method: 'GET',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      console.warn('[Upload] Could not delete ZIP, but extraction succeeded');
-      return { success: true, message: 'Cleanup skipped' };
-    }
-
-    console.log('[Upload] ZIP file deleted (cleanup)');
-    return { success: true, message: 'ZIP deleted' };
-  } catch (error: any) {
-    // Non-critical error
-    console.warn('[Upload] Cleanup failed, but upload succeeded:', error);
-    return { success: true, message: 'Cleanup failed but upload OK' };
-  }
-}
-
-/**
- * Test cPanel connection
+ * Test connection to cPanel via proxy
  */
 export async function testCPanelConnection(config: UploadConfig): Promise<UploadResult> {
   try {
-    const auth = btoa(`${config.cpanelUsername}:${config.cpanelApiToken}`);
+    console.log('[Test] Testing cPanel connection via proxy...');
 
-    const response = await fetch(
-      `https://${config.cpanelHost}:2083/execute/Fileman/list_files?dir=/${config.targetPath}`,
-      {
-        method: 'GET',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-        },
-      }
-    );
+    const response = await fetch(`${PROXY_URL}/api/test-cpanel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        cpanelHost: config.cpanelHost,
+        cpanelUsername: config.cpanelUsername,
+        cpanelApiToken: config.cpanelApiToken,
+        targetPath: config.targetPath
+      }),
+    });
 
     if (!response.ok) {
-      throw new Error(`Connection test failed: ${response.status}`);
+      throw new Error(`Proxy server returned ${response.status}`);
     }
 
     const result = await response.json();
+    return result;
+  } catch (error: any) {
+    console.error('[Test] Error:', error);
 
-    if (result.errors && result.errors.length > 0) {
-      throw new Error(result.errors[0]);
+    if (error.message.includes('Failed to fetch') || error.message.includes('ECONNREFUSED')) {
+      return {
+        success: false,
+        message: 'שרת ה-Proxy לא רץ',
+        error: 'הרץ את שרת ה-Proxy עם: npm run server'
+      };
     }
 
     return {
-      success: true,
-      message: 'חיבור ל-cPanel הצליח! ✅'
-    };
-  } catch (error: any) {
-    return {
       success: false,
-      message: 'חיבור ל-cPanel נכשל',
+      message: 'בדיקת חיבור נכשלה',
       error: error.message
     };
   }
+}
+
+/**
+ * Helper: Convert Blob to Base64 string
+ */
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      // Remove data URL prefix (e.g., "data:application/zip;base64,")
+      const base64Data = base64.split(',')[1];
+      resolve(base64Data);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 /**
@@ -243,6 +166,7 @@ export function getUploadConfig(): UploadConfig | null {
   const path = process.env.CPANEL_TARGET_PATH || 'public_html/Resources';
 
   if (!host || !username || !token) {
+    console.warn('[Config] Missing cPanel credentials in environment variables');
     return null;
   }
 
@@ -252,4 +176,19 @@ export function getUploadConfig(): UploadConfig | null {
     cpanelApiToken: token,
     targetPath: path
   };
+}
+
+/**
+ * Check if proxy server is running
+ */
+export async function isProxyRunning(): Promise<boolean> {
+  try {
+    const response = await fetch(`${PROXY_URL}/health`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(2000) // 2 second timeout
+    });
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
 }

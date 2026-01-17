@@ -31,12 +31,26 @@ This application generates interactive educational content in Hebrew using **Ope
      ```
 
 4. **Run the app:**
+
+   **Option A: Full setup with auto-upload (requires proxy)**
+   ```bash
+   # Terminal 1 - Start proxy server (for cPanel uploads)
+   npm run server
+
+   # Terminal 2 - Start app
+   npm run dev
+
+   # OR run both together:
+   npm run start:all
+   ```
+
+   **Option B: Simple setup (no auto-upload)**
    ```bash
    npm run dev
    ```
 
 5. **Open your browser:**
-   - Navigate to [http://localhost:3000](http://localhost:3000)
+   - Navigate to [http://localhost:3001](http://localhost:3001)
 
 ## 🧠 Supported LLM Models
 
@@ -76,6 +90,40 @@ See all models: [https://openrouter.ai/models](https://openrouter.ai/models)
 - **Port 3000 in use?** Change `port: 3000` in `vite.config.ts`
 - **npm not found?** Restart your terminal after installing Node.js
 - **Permission errors?** Run as Administrator
+
+## 📤 Auto-Upload to cPanel
+
+**NEW!** Automatically upload generated courses to your server!
+
+### Setup (Optional):
+
+1. **Get cPanel API Token:**
+   - Login to [https://shlomi.online:2083](https://shlomi.online:2083)
+   - Go to: Security → Manage API Tokens
+   - Create token with "Files" permission
+   - Copy the token
+
+2. **Configure `.env.local`:**
+   ```bash
+   CPANEL_HOST=shlomi.online
+   CPANEL_USERNAME=shlomion
+   CPANEL_API_TOKEN=your-token-here
+   CPANEL_TARGET_PATH=public_html/Resources
+   AUTO_UPLOAD_ENABLED=true
+   ```
+
+3. **Start Proxy Server:**
+   ```bash
+   npm run server
+   ```
+
+4. **Use Auto-Upload:**
+   - Create course
+   - Check ✅ "העלאה אוטומטית ל-bdnhost.net"
+   - Click Export
+   - Course uploads automatically!
+
+📖 **Detailed Guide:** See [PROXY_SETUP.md](./PROXY_SETUP.md) and [CPANEL_UPLOAD_GUIDE.md](./CPANEL_UPLOAD_GUIDE.md)
 
 ## 📚 Features
 
