@@ -1,0 +1,52 @@
+{
+  "courses": [
+    {
+      "id": 1,
+      "topic": "מבוא לבינה מלאכותית ולמידת מכונה",
+      "status": "pending",
+      "priority": 1,
+      "createdAt": null,
+      "uploadedAt": null,
+      "url": null,
+      "error": null
+    },
+    {
+      "id": 2,
+      "topic": "Excel מתקדם - טבלאות Pivot ונוסחאות מורכבות",
+      "status": "pending",
+      "priority": 2,
+      "createdAt": null,
+      "uploadedAt": null,
+      "url": null,
+      "error": null
+    },
+    {
+      "id": 3,
+      "topic": "עיצוב UI/UX - עקרונות ובסיס",
+      "status": "pending",
+      "priority": 3,
+      "createdAt": null,
+      "uploadedAt": null,
+      "url": null,
+      "error": null
+    },
+    {
+      "id": 4,
+      "topic": "שיווק דיגיטלי ורשתות חברתיות",
+      "status": "pending",
+      "priority": 4,
+      "createdAt": null,
+      "uploadedAt": null,
+      "url": null,
+      "error": null
+    }
+  ],
+  "metadata": {
+    "totalCourses": 4,
+    "pending": 4,
+    "inProgress": 0,
+    "completed": 0,
+    "failed": 0,
+    "lastUpdated": null
+  }
+}

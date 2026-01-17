@@ -1,0 +1,27 @@
+{
+  "schedule": {
+    "enabled": false,
+    "interval": "hourly",
+    "customCron": null,
+    "comment": "interval options: 'hourly', 'daily', 'weekly', or use customCron for advanced scheduling"
+  },
+  "limits": {
+    "maxCoursesPerDay": 4,
+    "maxCoursesPerRun": 1
+  },
+  "autoUpload": {
+    "enabled": true,
+    "comment": "Automatically upload generated courses to server"
+  },
+  "notifications": {
+    "dashboard": true,
+    "cli": true,
+    "email": false,
+    "emailAddress": null
+  },
+  "retry": {
+    "onError": "skip",
+    "maxRetries": 0,
+    "comment": "onError options: 'skip' or 'retry'"
+  }
+}
